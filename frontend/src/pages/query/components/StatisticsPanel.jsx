@@ -68,8 +68,11 @@ export default function StatisticsPanel({ params, onChange, data, loading, error
                     <th>分组</th>
                     <th className="text-right">{isCount ? '数据条数' : '统计值'}</th>
                     <th className="text-right">数据量</th>
+                    <th className="text-right">参评数</th>
                     <th className="text-right">超标数</th>
-                    <th className="text-right">超标率</th>
+                    <th className="text-right">无效剔除</th>
+                    <th className="text-right">仅记录</th>
+                    <th className="text-right">达标率</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -77,14 +80,35 @@ export default function StatisticsPanel({ params, onChange, data, loading, error
                     <tr key={item.key}>
                       <td>{item.label}</td>
                       <td className="text-right strong">{formatNumber(item.value)}</td>
-                      <td className="text-right">{item.count}</td>
+                      <td className="text-right">{item.total}</td>
+                      <td className="text-right">{item.rateable_count}</td>
                       <td className="text-right danger-text">{item.exceeded_count}</td>
-                      <td className="text-right">{formatPercent(item.exceed_rate)}</td>
+                      <td className="text-right muted">{item.invalid_count}</td>
+                      <td className="text-right muted">{item.unrateable_count}</td>
+                      <td className="text-right strong">{formatPercent(item.compliance_rate)}</td>
                     </tr>
                   ))}
                 </tbody>
+                {data?.totals ? (
+                  <tfoot>
+                    <tr>
+                      <td className="strong">合计</td>
+                      <td className="text-right">-</td>
+                      <td className="text-right strong">{data.totals.total}</td>
+                      <td className="text-right strong">{data.totals.rateable_count}</td>
+                      <td className="text-right danger-text strong">{data.totals.exceeded_count}</td>
+                      <td className="text-right muted">{data.totals.invalid_count}</td>
+                      <td className="text-right muted">{data.totals.unrateable_count}</td>
+                      <td className="text-right strong">{formatPercent(data.totals.compliance_rate)}</td>
+                    </tr>
+                  </tfoot>
+                ) : null}
               </table>
             </div>
+            <p className="hint small">
+              达标率 = (参评数 - 超标数) / 参评数; 已标记无效(超标单标注为已忽略)与无限值因子不参与计算,
+              合计口径与上方卡片、明细列表及导出文件一致。
+            </p>
           </>
         ) : null}
       </div>

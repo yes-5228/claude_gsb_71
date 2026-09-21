@@ -11,7 +11,7 @@ import { formatDateTime, formatNumber, formatRatio } from '../../../utils/format
 
 const STATUS_CHOICES = [
   { value: 'confirmed', label: '确认超标', hint: '经复核确属超标, 需记录处置说明' },
-  { value: 'ignored', label: '忽略记录', hint: '设备异常 / 校准期数据等, 需说明原因' },
+  { value: 'ignored', label: '忽略(标记原始数据无效)', hint: '设备异常 / 校准期数据等, 需说明原因; 标记后该数据不计入达标率' },
   { value: 'pending', label: '保持待标注', hint: '暂不处理, 保留在待办列表' }
 ]
 

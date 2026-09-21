@@ -1,8 +1,10 @@
 """监测数据查询: 过滤条件解析, 统计聚合与导出数据准备."""
 from datetime import datetime, time
 
-from sqlalchemy import cast, func, or_
+from sqlalchemy import exists, func, or_
+from sqlalchemy.orm import joinedload
 
+from ..domain import compliance
 from ..domain.constants import (
     DATA_SOURCE_LABELS,
     EXCEEDANCE_STATUS_LABELS,
@@ -137,8 +139,13 @@ def apply_filters(query, filters):
             or_(Station.name.like(like), Station.code.like(like), Station.address.like(like))
         )
     if filters["exceedance_status"]:
-        query = query.join(Exceedance, Exceedance.measurement_id == Measurement.id).filter(
-            Exceedance.status.in_(filters["exceedance_status"])
+        # 用 EXISTS 半连接按标注状态过滤, 不产生重复行(一个数据最多一条超标单,
+        # 但半连接在任何查询形态下都安全), 也不影响统一口径里的相关 EXISTS。
+        query = query.filter(
+            exists().where(
+                Exceedance.measurement_id == Measurement.id,
+                Exceedance.status.in_(filters["exceedance_status"]),
+            )
         )
     return query
 
@@ -163,31 +170,46 @@ def measurement_query(args):
     return apply_sort(query, args.get("sort"), args.get("order")), filters
 
 
-def summary(filters):
-    """Aggregate counters shown above the query result table."""
-    query = apply_filters(
-        db.session.query(
-            func.count(Measurement.id),
-            func.sum(cast(Measurement.is_exceeded, db.Integer)),
-            func.count(func.distinct(Measurement.station_id)),
-            func.min(Measurement.measured_at),
-            func.max(Measurement.measured_at),
-            func.avg(Measurement.value),
-        ),
-        filters,
+def measurement_stats(filters, include_extras=False):
+    """Canonical rate aggregation for the filtered measurement set.
+
+    Used by the detail list, the overview dashboard and the CSV exports so
+    they always report the same numbers for the same filters. The aggregation
+    covers the whole filtered set and never depends on pagination.
+    """
+    expressions = compliance.aggregate_expressions()
+    columns = list(expressions.values())
+    if include_extras:
+        columns.extend(
+            [
+                func.count(func.distinct(Measurement.station_id)).label("station_count"),
+                func.min(Measurement.measured_at).label("first_at"),
+                func.max(Measurement.measured_at).label("last_at"),
+                func.avg(Measurement.value).label("avg_value"),
+            ]
+        )
+    query = apply_filters(db.session.query(*columns), filters)
+    row = query.one()
+    data = dict(row._mapping)
+    payload = compliance.build_rate_payload(
+        data.get("total"),
+        data.get("rateable"),
+        data.get("unrateable"),
+        data.get("invalid"),
+        data.get("exceeded"),
     )
-    total, exceeded, stations, first_at, last_at, avg_value = query.one()
-    total = int(total or 0)
-    exceeded = int(exceeded or 0)
-    return {
-        "total": total,
-        "exceeded_count": exceeded,
-        "exceed_rate": round(exceeded / total, 4) if total else 0.0,
-        "station_count": int(stations or 0),
-        "first_measured_at": iso(first_at),
-        "last_measured_at": iso(last_at),
-        "avg_value": round(float(avg_value), 2) if avg_value is not None else None,
-    }
+    if include_extras:
+        payload["station_count"] = int(data.get("station_count") or 0)
+        payload["first_measured_at"] = iso(data.get("first_at"))
+        payload["last_measured_at"] = iso(data.get("last_at"))
+        avg_value = data.get("avg_value")
+        payload["avg_value"] = round(float(avg_value), 2) if avg_value is not None else None
+    return payload
+
+
+def summary(filters):
+    """Aggregate counters shown above the detail/query result tables."""
+    return measurement_stats(filters, include_extras=True)
 
 
 def _metric_expression(metric):
@@ -215,8 +237,7 @@ def statistics(args):
         )
 
     value_expr = _metric_expression(metric).label("metric_value")
-    count_expr = func.count(Measurement.id).label("row_count")
-    exceeded_expr = func.sum(cast(Measurement.is_exceeded, db.Integer)).label("exceeded_count")
+    rate_exprs = compliance.aggregate_expressions(prefix="rate")
 
     if group_by == "station":
         query = db.session.query(
@@ -225,23 +246,22 @@ def statistics(args):
             Station.name.label("station_name"),
             Station.area.label("area"),
             value_expr,
-            count_expr,
-            exceeded_expr,
+            *rate_exprs.values(),
         ).group_by(Station.id, Station.code, Station.name, Station.area)
         is_time_group = False
     elif group_by == "area":
         query = db.session.query(
-            Station.area.label("area"), value_expr, count_expr, exceeded_expr
+            Station.area.label("area"), value_expr, *rate_exprs.values()
         ).group_by(Station.area)
         is_time_group = False
     elif group_by == "day":
         bucket = func.date(Measurement.measured_at).label("bucket")
-        query = db.session.query(bucket, value_expr, count_expr, exceeded_expr).group_by(bucket)
+        query = db.session.query(bucket, value_expr, *rate_exprs.values()).group_by(bucket)
         is_time_group = True
     elif group_by == "month":
         year = func.extract("year", Measurement.measured_at).label("year")
         month = func.extract("month", Measurement.measured_at).label("month")
-        query = db.session.query(year, month, value_expr, count_expr, exceeded_expr).group_by(
+        query = db.session.query(year, month, value_expr, *rate_exprs.values()).group_by(
             year, month
         )
         is_time_group = True
@@ -252,7 +272,7 @@ def statistics(args):
             "data_source": Measurement.data_source,
         }[group_by]
         query = db.session.query(
-            column.label("bucket"), value_expr, count_expr, exceeded_expr
+            column.label("bucket"), value_expr, *rate_exprs.values()
         ).group_by(column)
         is_time_group = False
 
@@ -262,8 +282,13 @@ def statistics(args):
     items = []
     for row in rows:
         data = dict(row._mapping)
-        count = int(data.get("row_count") or 0)
-        exceeded = int(data.get("exceeded_count") or 0)
+        rates = compliance.build_rate_payload(
+            data.get("rate_total"),
+            data.get("rate_rateable"),
+            data.get("rate_unrateable"),
+            data.get("rate_invalid"),
+            data.get("rate_exceeded"),
+        )
         raw_value = data.get("metric_value")
         if group_by == "station":
             key = data.get("station_code")
@@ -292,9 +317,10 @@ def statistics(args):
                 "key": key,
                 "label": label,
                 "value": round(float(raw_value), 2) if raw_value is not None else None,
-                "count": count,
-                "exceeded_count": exceeded,
-                "exceed_rate": round(exceeded / count, 4) if count else 0.0,
+                **rates,
+                # 兼容旧字段名: count/row_count 与超限展示保持可用
+                "count": rates["total"],
+                "row_count": rates["total"],
             }
         )
 
@@ -303,14 +329,18 @@ def statistics(args):
     else:
         items.sort(key=lambda item: (item["value"] is None, -(item["value"] or 0)))
 
+    totals = compliance.build_rate_payload(
+        sum(item["total"] for item in items),
+        sum(item["rateable_count"] for item in items),
+        sum(item["unrateable_count"] for item in items),
+        sum(item["invalid_count"] for item in items),
+        sum(item["exceeded_count"] for item in items),
+    )
     return {
         "group_by": group_by,
         "metric": metric,
         "items": items,
-        "totals": {
-            "count": sum(item["count"] for item in items),
-            "exceeded_count": sum(item["exceeded_count"] for item in items),
-        },
+        "totals": totals,
     }
 
 
@@ -326,3 +356,56 @@ def option_payload():
             {"value": key, "label": label} for key, label in STATION_TYPE_LABELS.items()
         ],
     }
+
+
+# ---- CSV 导出: 明细列表页与高级查询页共用同一套列与统计口径 ----
+
+def _row_judgement(row):
+    """单行判定, 取值与 compliance 率口径严格对应, 供导出/展示对账。"""
+    status = row.exceedance.status if row.exceedance else None
+    if status == "ignored":
+        return "无效"
+    if row.limit_value is None:
+        return "仅记录"
+    return "超标" if row.is_exceeded else "达标"
+
+
+def measurement_export(args, max_rows):
+    """Return (rows, columns, stats, truncated) for measurement CSV exports.
+
+    ``stats`` uses the same full-filter aggregation as the list cards and the
+    dashboard; it is not affected by the row cap (only the detail rows are).
+    """
+    query, filters = measurement_query(args)
+    rows = (
+        query.options(
+            joinedload(Measurement.station),
+            joinedload(Measurement.exceedance),
+        )
+        .limit(max_rows + 1)
+        .all()
+    )
+    truncated = len(rows) > max_rows
+    rows = rows[:max_rows]
+
+    columns = [
+        ("站点编码", lambda row: row.station.code if row.station else ""),
+        ("站点名称", lambda row: row.station.name if row.station else ""),
+        ("所属区域", lambda row: row.station.area if row.station else ""),
+        ("监测因子", lambda row: row.pollutant_label()),
+        ("数据周期", lambda row: PERIOD_LABELS.get(row.period, row.period)),
+        ("监测值", "value"),
+        ("单位", "unit"),
+        ("限值", "limit_value"),
+        ("判定", _row_judgement),
+        ("原始超标标志", lambda row: "是" if row.is_exceeded else "否"),
+        ("超标倍数", "exceed_ratio"),
+        ("标注状态", lambda row: EXCEEDANCE_STATUS_LABELS.get(row.exceedance.status, "")
+            if row.exceedance else ""),
+        ("监测时间", lambda row: row.measured_at.strftime("%Y-%m-%d %H:%M")),
+        ("数据来源", lambda row: DATA_SOURCE_LABELS.get(row.data_source, row.data_source)),
+        ("录入人", "recorder"),
+        ("备注", "remark"),
+    ]
+    stats = measurement_stats(filters)
+    return rows, columns, stats, truncated

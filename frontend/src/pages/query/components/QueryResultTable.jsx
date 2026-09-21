@@ -1,7 +1,8 @@
 import DataTable from '../../../components/common/DataTable.jsx'
 import Tag from '../../../components/common/Tag.jsx'
 import { DATA_SOURCE_TONE, EXCEEDANCE_STATUS_TONE } from '../../../constants/index.js'
-import { formatDateTime, formatNumber } from '../../../utils/format.js'
+import { judgementOf } from '../../../utils/compliance.js'
+import { formatDateTime, formatNumber, formatRatio } from '../../../utils/format.js'
 
 export default function QueryResultTable({ rows, loading }) {
   const columns = [
@@ -15,16 +16,22 @@ export default function QueryResultTable({ rows, loading }) {
       title: '监测值',
       align: 'right',
       render: (row) => (
-        <span className={row.is_exceeded ? 'danger-text strong' : ''}>
+        <span className={row.is_exceeded && row.exceedance_status !== 'ignored' ? 'danger-text strong' : ''}>
           {formatNumber(row.value)} <span className="muted small">{row.unit}</span>
         </span>
       )
     },
-    { key: 'limit_value', title: '限值', align: 'right', render: (row) => (row.limit_value === null ? '无限值' : formatNumber(row.limit_value)) },
+    { key: 'limit_value', title: '限值', align: 'right', render: (row) => (row.limit_value === null ? <span className="muted small">无限值</span> : formatNumber(row.limit_value)) },
     {
-      key: 'is_exceeded',
-      title: '超标',
-      render: (row) => (row.is_exceeded ? <Tag tone="danger">是</Tag> : <Tag tone="success">否</Tag>)
+      key: 'judgement',
+      title: '判定',
+      render: (row) => {
+        const judgement = judgementOf(row)
+        if (judgement.code === 'exceeded') {
+          return <Tag tone="danger">超标 {formatRatio(row.exceed_ratio)}</Tag>
+        }
+        return <Tag tone={judgement.tone}>{judgement.label}</Tag>
+      }
     },
     {
       key: 'exceedance_status',
@@ -32,7 +39,7 @@ export default function QueryResultTable({ rows, loading }) {
       render: (row) =>
         row.exceedance_status ? (
           <Tag tone={EXCEEDANCE_STATUS_TONE[row.exceedance_status]}>
-            {row.exceedance_status === 'pending' ? '待标注' : row.exceedance_status === 'confirmed' ? '已确认' : '已忽略'}
+            {row.exceedance_status === 'pending' ? '待标注' : row.exceedance_status === 'confirmed' ? '已确认' : '已忽略(无效)'}
           </Tag>
         ) : (
           <span className="muted">-</span>

@@ -6,7 +6,7 @@ import DataTable from '../../../components/common/DataTable.jsx'
 import { ErrorState, Loading } from '../../../components/common/Feedback.jsx'
 import { STATION_STATUS_TONE } from '../../../constants/index.js'
 import { useAsyncData } from '../../../hooks/useAsyncData.js'
-import { formatDate, formatDateTime, formatNumber } from '../../../utils/format.js'
+import { formatDate, formatDateTime, formatNumber, formatPercent } from '../../../utils/format.js'
 
 export default function StationDetailDrawer({ stationId, onClose, onEdit }) {
   const loader = useCallback(() => getStation(stationId), [stationId])
@@ -18,7 +18,10 @@ export default function StationDetailDrawer({ stationId, onClose, onEdit }) {
   const columns = [
     { key: 'pollutant', title: '监测因子' },
     { key: 'count', title: '数据量', align: 'right' },
+    { key: 'rateable_count', title: '参评数', align: 'right' },
     { key: 'exceeded_count', title: '超标', align: 'right', render: (row) => (row.exceeded_count ? <span className="danger-text">{row.exceeded_count}</span> : '0') },
+    { key: 'invalid_count', title: '无效剔除', align: 'right', render: (row) => (row.invalid_count ? <span className="muted">{row.invalid_count}</span> : '0') },
+    { key: 'compliance_rate', title: '达标率', align: 'right', render: (row) => <span className="strong">{formatPercent(row.compliance_rate)}</span> },
     { key: 'avg_value', title: '均值', align: 'right', render: (row) => formatNumber(row.avg_value) },
     { key: 'max_value', title: '最大值', align: 'right', render: (row) => formatNumber(row.max_value) }
   ]
@@ -75,22 +78,25 @@ export default function StationDetailDrawer({ stationId, onClose, onEdit }) {
             <div className="stat-card">
               <div className="stat-label">累计监测数据</div>
               <div className="stat-value">{stats.measurement_count ?? 0}</div>
+              <div className="stat-foot">参评 {stats.rateable_count ?? 0} · 仅记录 {stats.unrateable_count ?? 0}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">超标记录</div>
-              <div className="stat-value danger-text">{stats.exceeded_count ?? 0}</div>
+              <div className="stat-label">达标率</div>
+              <div className="stat-value success-text">{formatPercent(stats.compliance_rate)}</div>
+              <div className="stat-foot">有效超标 {stats.exceeded_count ?? 0} · 超标率 {formatPercent(stats.exceed_rate)}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">待标注</div>
+              <div className="stat-label">无效 / 待标注</div>
               <div className="stat-value" style={{ color: 'var(--warning)' }}>
-                {stats.pending_count ?? 0}
+                {stats.invalid_count ?? 0} / {stats.pending_count ?? 0}
               </div>
+              <div className="stat-foot">已标记无效不参评</div>
             </div>
           </div>
           <div className="card">
             <div className="card-header">
               <h3>按因子统计</h3>
-              <span className="hint">限值参考 GB 3095-2012 二级标准</span>
+              <span className="hint">达标率口径: 无效与无限值不参评 · 限值参考 GB 3095-2012 二级标准</span>
             </div>
             <DataTable columns={columns} rows={stats.pollutants || []} emptyText="该监测点暂无监测数据" />
           </div>

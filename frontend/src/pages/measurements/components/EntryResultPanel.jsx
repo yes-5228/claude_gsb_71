@@ -2,6 +2,7 @@ import { SectionCard } from '../../../components/common/Card.jsx'
 import { Alert } from '../../../components/common/Feedback.jsx'
 import Tag from '../../../components/common/Tag.jsx'
 import { EXCEEDANCE_LEVEL_LABELS, EXCEEDANCE_LEVEL_TONE } from '../../../constants/index.js'
+import { rateFootnote } from '../../../utils/compliance.js'
 import { formatDateTime, formatNumber, formatPercent } from '../../../utils/format.js'
 
 function ResultTable({ columns, rows }) {
@@ -43,17 +44,24 @@ export default function EntryResultPanel({ result, summary, onClose }) {
               <div className="stat-card">
                 <div className="stat-label">当前筛选记录数</div>
                 <div className="stat-value">{summary.total}</div>
+                <div className="stat-foot">参评 {summary.rateable_count} · 仅记录 {summary.unrateable_count}</div>
               </div>
               <div className="stat-card">
-                <div className="stat-label">其中超标</div>
-                <div className="stat-value danger-text">{summary.exceeded_count}</div>
-                <div className="stat-foot">超标率 {formatPercent(summary.exceed_rate)}</div>
+                <div className="stat-label">达标率</div>
+                <div className="stat-value success-text">{formatPercent(summary.compliance_rate)}</div>
+                <div className="stat-foot">有效超标 {summary.exceeded_count} · 超标率 {formatPercent(summary.exceed_rate)}</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">无效剔除</div>
+                <div className="stat-value">{summary.invalid_count}</div>
+                <div className="stat-foot">已忽略(无效)的记录不参评</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">涉及监测点</div>
                 <div className="stat-value">{summary.station_count}</div>
               </div>
             </div>
+            <p className="hint small">{rateFootnote(summary)} · 统计覆盖全部筛选结果, 与分页无关</p>
             <dl className="kv">
               <dt>最早监测时间</dt>
               <dd>{formatDateTime(summary.first_measured_at)}</dd>

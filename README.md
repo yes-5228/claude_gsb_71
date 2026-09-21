@@ -28,7 +28,7 @@
 | 数据库 | SQLite(默认, 零依赖) / PostgreSQL 16(可选, compose 覆盖文件) |
 | 前端 | React 18 · React Router 6 · Vite 7 · Axios · 原生 CSS(设计令牌 + 组件类) |
 | 部署 | Docker 多阶段构建 · Nginx 静态托管与 `/api` 反向代理 · docker compose |
-| 测试 | Pytest(43 个后端用例: 接口 + 领域规则) |
+| 测试 | Pytest(47 个后端用例: 接口 + 领域规则 + 达标率统一口径) |
 
 ## 目录结构
 
@@ -141,6 +141,29 @@ docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d --buil
 - **无 1 小时限值的因子**(PM2.5、PM10 小时值)仅记录数值, 不参与超标判定, 避免误报。
 - **标注状态**: `待标注(pending)` 由系统自动创建, 人工标注为 `已确认(confirmed)` 或 `已忽略(ignored)`; 确认与忽略都必须填写标注说明, 用于后续追溯。
 
+### 达标率统一口径
+
+明细列表、运行概览看板、聚合统计(报表)与 CSV 导出的达标率/超标率由后端
+`backend/app/domain/compliance.py` **同一处**计算(对应前端 `utils/compliance.js`
+的展示镜像), 任何页面都不允许自行编写"超标数 / 总数"除法。统计恒基于筛选后的
+**完整数据集合**, 与分页页码、每页条数无关; 同一筛选条件下四处数字完全一致。
+
+| 类别 | 判定 | 是否进入率的分母 | 各处表现 |
+| --- | --- | --- | --- |
+| 达标 | 有限值且 `is_exceeded = false` | 是 | 判定"达标" |
+| 超标 | 有限值且 `is_exceeded = true`, 超标单待标注/已确认 | 是, 计入超标分子 | 判定"超标" |
+| **已标记无效** | 超标单被标注为 `已忽略(ignored)`(设备异常/校准期等) | **否**, 分子分母同时剔除 | 原始数据与标注单保留可查; 列表判定显示"无效"、数值不再标红、标注状态显示"已忽略(无效)"; 汇总中单列`invalid_count`(无效剔除); CSV 明细判定列为"无效"并从统计块剔除 |
+| **无限值仅记录** | `limit_value` 为空(PM2.5/PM10 小时值) | **否**, 既不算达标也不算超标 | 判定"仅记录"; 汇总中单列 `unrateable_count`; CSV 判定列为"仅记录" |
+
+- **达标率** = (参评数据量 − 有效超标数据量) / 参评数据量; **超标率** = 有效超标 / 参评。
+- 参评数据量为 0(范围内全部是无效/无限值记录)时率返回 `null`, 页面展示 "-", 而非误导性的 0%。
+- 汇总字段: `total`(数据总量)、`rateable_count`(参评)、`exceeded_count`(有效超标)、
+  `invalid_count`(无效剔除)、`unrateable_count`(无限值仅记录)、`exceed_rate`、`compliance_rate`。
+- CSV 文件尾部追加"达标率统计"块, 明细行另含`判定`/`原始超标标志`/`标注状态`三列,
+  可直接逐行对账; 明细行受导出上限(20000 行)截断时, 统计块仍按全部筛选结果计算。
+- 注意区分: 超标记录标注工作台(`/exceedances`)统计的是**超标工单**(含已忽略单,
+  供留痕追溯); 达标率统计的是**监测数据**, 已忽略单对应的原始数据按无效剔除。
+
 ## API 概览
 
 统一前缀 `/api`, 成功直接返回数据对象; 失败返回 `{"error": {"code": "...", "message": "...", "fields": {...}}}`。
@@ -228,7 +251,7 @@ docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d --buil
 
 ```bash
 cd backend
-python -m pytest -q          # 43 个用例: 台账 CRUD/级联、录入与超标判定、标注规则、查询统计与导出、元数据接口
+python -m pytest -q          # 47 个用例: 台账 CRUD/级联、录入与超标判定、标注规则、查询统计与导出、达标率统一口径、元数据接口
 
 cd frontend
 npm run build                # 生产构建校验

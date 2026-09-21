@@ -1,5 +1,16 @@
 """数据查询与统计接口测试."""
 
+SUMMARY_LABELS = {
+    "数据总量",
+    "参评数据量",
+    "其中: 达标数据量",
+    "其中: 超标数据量",
+    "无限值仅记录(不参评)",
+    "已标记无效(不参评)",
+    "达标率",
+    "超标率",
+}
+
 
 def _seed_two_days(client, station, entry_payload):
     client.post(
@@ -22,12 +33,22 @@ def _seed_two_days(client, station, entry_payload):
     )
 
 
+def _summary_section(text):
+    section = {}
+    for line in text.splitlines():
+        label, comma, value = line.partition(",")
+        if comma and label in SUMMARY_LABELS:
+            section[label] = value
+    return section
+
+
 def test_query_by_date_range_and_values(client, station, entry_payload):
     _seed_two_days(client, station, entry_payload)
 
     all_rows = client.get("/api/query/measurements").get_json()
     assert all_rows["total"] == 4
     assert all_rows["summary"]["exceed_rate"] == 0.5
+    assert all_rows["summary"]["compliance_rate"] == 0.5
 
     day_range = client.get(
         "/api/query/measurements?date_from=2026-09-02&date_to=2026-09-02"
@@ -74,7 +95,7 @@ def test_statistics_by_day_is_chronological(client, station, entry_payload):
     _seed_two_days(client, station, entry_payload)
     body = client.get("/api/query/statistics?group_by=day&metric=avg").get_json()
     assert [item["key"] for item in body["items"]] == ["2026-09-01", "2026-09-02"]
-    assert body["totals"]["count"] == 4
+    assert body["totals"]["total"] == 4
 
 
 def test_statistics_by_station_uses_station_labels(client, station, second_station, entry_payload):
@@ -92,10 +113,18 @@ def test_query_export_respects_filters(client, station, entry_payload):
     _seed_two_days(client, station, entry_payload)
     response = client.get("/api/query/export?pollutant=PM25")
     assert response.status_code == 200
-    lines = response.get_data(as_text=True).strip().splitlines()
-    assert len(lines) == 3
-    assert lines[0].startswith("\ufeff站点编码")
-    assert "PM2.5" in lines[1]
+    text = response.get_data(as_text=True)
+    lines = text.strip().splitlines()
+    assert "站点编码" in lines[0]
+    data_rows = [line for line in lines if line.startswith(("TEST-", "SZ-"))]
+    assert len(data_rows) == 2
+    assert all("PM2.5" in line for line in data_rows)
+    summary = _summary_section(text)
+    assert summary["数据总量"] == "2"
+    # PM2.5 日均值两条, 1 条超标; 统计块与明细行、列表卡片同一口径
+    assert summary["参评数据量"] == "2"
+    assert summary["其中: 超标数据量"] == "1"
+    assert summary["达标率"] == "50.00%"
 
 
 def test_query_options_payload(client):

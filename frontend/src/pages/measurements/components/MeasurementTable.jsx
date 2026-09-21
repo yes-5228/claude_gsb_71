@@ -1,6 +1,7 @@
 import DataTable from '../../../components/common/DataTable.jsx'
 import Tag from '../../../components/common/Tag.jsx'
-import { DATA_SOURCE_TONE } from '../../../constants/index.js'
+import { DATA_SOURCE_TONE, EXCEEDANCE_STATUS_TONE } from '../../../constants/index.js'
+import { judgementOf } from '../../../utils/compliance.js'
 import { formatDateTime, formatNumber, formatRatio } from '../../../utils/format.js'
 
 export default function MeasurementTable({ rows, loading, onDelete }) {
@@ -24,7 +25,7 @@ export default function MeasurementTable({ rows, loading, onDelete }) {
       align: 'right',
       className: 'cell-nowrap',
       render: (row) => (
-        <span className={row.is_exceeded ? 'danger-text strong' : ''}>
+        <span className={row.is_exceeded && row.exceedance_status !== 'ignored' ? 'danger-text strong' : ''}>
           {formatNumber(row.value)} <span className="muted small">{row.unit}</span>
         </span>
       )
@@ -37,9 +38,24 @@ export default function MeasurementTable({ rows, loading, onDelete }) {
     },
     {
       key: 'is_exceeded',
-      title: '超标判定',
+      title: '判定',
+      render: (row) => {
+        const judgement = judgementOf(row)
+        if (judgement.code === 'exceeded') return <Tag tone="danger">超标 {formatRatio(row.exceed_ratio)}</Tag>
+        return <Tag tone={judgement.tone}>{judgement.label}</Tag>
+      }
+    },
+    {
+      key: 'exceedance_status',
+      title: '标注状态',
       render: (row) =>
-        row.is_exceeded ? <Tag tone="danger">{formatRatio(row.exceed_ratio)}</Tag> : <Tag tone="success">达标</Tag>
+        row.exceedance_status ? (
+          <Tag tone={EXCEEDANCE_STATUS_TONE[row.exceedance_status]}>
+            {row.exceedance_status === 'pending' ? '待标注' : row.exceedance_status === 'confirmed' ? '已确认' : '已忽略(无效)'}
+          </Tag>
+        ) : (
+          <span className="muted">-</span>
+        )
     },
     {
       key: 'data_source_label',

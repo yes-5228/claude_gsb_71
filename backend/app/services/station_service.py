@@ -1,6 +1,7 @@
 """监测点台账业务逻辑."""
-from sqlalchemy import cast, func, or_
+from sqlalchemy import func, or_
 
+from ..domain import compliance
 from ..domain.constants import STATION_STATUS_LABELS, STATION_TYPE_LABELS
 from ..errors import ConflictError, NotFoundError
 from ..extensions import db
@@ -79,22 +80,35 @@ def delete_station(station):
     return {"measurements_removed": measurement_count, "exceedances_removed": exceedance_count}
 
 
-def stats_map(station_ids):
-    """Aggregated counters for a page of stations."""
+def _station_rate_rows(station_ids):
+    """Canonical rate counters grouped by station (same rules everywhere)."""
     if not station_ids:
         return {}
-    measurements = dict(
-        db.session.query(Measurement.station_id, func.count(Measurement.id))
+    expressions = compliance.aggregate_expressions(prefix="rate")
+    rows = (
+        db.session.query(Measurement.station_id.label("station_id"), *expressions.values())
         .filter(Measurement.station_id.in_(station_ids))
         .group_by(Measurement.station_id)
         .all()
     )
-    exceeded = dict(
-        db.session.query(Measurement.station_id, func.count(Measurement.id))
-        .filter(Measurement.station_id.in_(station_ids), Measurement.is_exceeded.is_(True))
-        .group_by(Measurement.station_id)
-        .all()
-    )
+    result = {}
+    for row in rows:
+        data = dict(row._mapping)
+        rates = compliance.build_rate_payload(
+            data.get("rate_total"),
+            data.get("rate_rateable"),
+            data.get("rate_unrateable"),
+            data.get("rate_invalid"),
+            data.get("rate_exceeded"),
+        )
+        result[data["station_id"]] = rates
+    return result
+
+
+def stats_map(station_ids):
+    """Aggregated counters for a page of stations."""
+    if not station_ids:
+        return {}
     pending = dict(
         db.session.query(Exceedance.station_id, func.count(Exceedance.id))
         .filter(Exceedance.station_id.in_(station_ids), Exceedance.status == "pending")
@@ -109,41 +123,68 @@ def stats_map(station_ids):
     )
     from ..models.base import iso
 
-    return {
-        station_id: {
-            "measurement_count": int(measurements.get(station_id, 0)),
-            "exceeded_count": int(exceeded.get(station_id, 0)),
+    rate_map = _station_rate_rows(station_ids)
+    result = {}
+    for station_id in station_ids:
+        rates = rate_map.get(
+            station_id,
+            compliance.build_rate_payload(0, 0, 0, 0, 0),
+        )
+        result[station_id] = {
+            # 数据量/超标数沿用历史字段名, 但口径已统一为 domain.compliance
+            "measurement_count": rates["total"],
+            "exceeded_count": rates["exceeded_count"],
             "pending_count": int(pending.get(station_id, 0)),
             "last_measured_at": iso(last_seen.get(station_id)),
+            "rateable_count": rates["rateable_count"],
+            "unrateable_count": rates["unrateable_count"],
+            "invalid_count": rates["invalid_count"],
+            "exceed_rate": rates["exceed_rate"],
+            "compliance_rate": rates["compliance_rate"],
         }
-        for station_id in station_ids
-    }
+    return result
 
 
 def detail_stats(station):
     """Per-pollutant counters for the station detail drawer."""
+    expressions = compliance.aggregate_expressions(prefix="rate")
     rows = (
         db.session.query(
-            Measurement.pollutant,
-            func.count(Measurement.id),
-            func.sum(cast(Measurement.is_exceeded, db.Integer)),
-            func.avg(Measurement.value),
-            func.max(Measurement.value),
+            Measurement.pollutant.label("pollutant"),
+            func.avg(Measurement.value).label("avg_value"),
+            func.max(Measurement.value).label("max_value"),
+            *expressions.values(),
         )
         .filter(Measurement.station_id == station.id)
         .group_by(Measurement.pollutant)
         .all()
     )
-    pollutants = [
-        {
-            "pollutant": pollutant,
-            "count": int(count or 0),
-            "exceeded_count": int(exceeded or 0),
-            "avg_value": round(float(avg), 2) if avg is not None else None,
-            "max_value": float(max_value) if max_value is not None else None,
-        }
-        for pollutant, count, exceeded, avg, max_value in rows
-    ]
+    pollutants = []
+    for row in rows:
+        data = dict(row._mapping)
+        rates = compliance.build_rate_payload(
+            data.get("rate_total"),
+            data.get("rate_rateable"),
+            data.get("rate_unrateable"),
+            data.get("rate_invalid"),
+            data.get("rate_exceeded"),
+        )
+        avg = data.get("avg_value")
+        max_value = data.get("max_value")
+        pollutants.append(
+            {
+                "pollutant": data["pollutant"],
+                "count": rates["total"],
+                "exceeded_count": rates["exceeded_count"],
+                "rateable_count": rates["rateable_count"],
+                "unrateable_count": rates["unrateable_count"],
+                "invalid_count": rates["invalid_count"],
+                "exceed_rate": rates["exceed_rate"],
+                "compliance_rate": rates["compliance_rate"],
+                "avg_value": round(float(avg), 2) if avg is not None else None,
+                "max_value": float(max_value) if max_value is not None else None,
+            }
+        )
     summary = stats_map([station.id]).get(station.id, {})
     summary["pollutants"] = sorted(pollutants, key=lambda item: item["pollutant"])
     return summary

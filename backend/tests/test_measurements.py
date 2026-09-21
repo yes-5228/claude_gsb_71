@@ -137,4 +137,7 @@ def test_export_measurements_csv(client, station, entry_payload):
     text = response.get_data(as_text=True)
     assert text.startswith("\ufeff站点编码")
     assert "测试监测点" in text
-    assert len([line for line in text.strip().splitlines()]) == 4
+    # 3 条明细数据行 + 文件尾部统一口径统计块
+    assert len([line for line in text.splitlines() if line.startswith("TEST-")]) == 3
+    assert "达标率统计" in text
+    assert "参评数据量" in text

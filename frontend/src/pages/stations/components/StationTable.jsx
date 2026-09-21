@@ -1,7 +1,7 @@
 import DataTable from '../../../components/common/DataTable.jsx'
 import Tag from '../../../components/common/Tag.jsx'
 import { STATION_STATUS_TONE } from '../../../constants/index.js'
-import { formatDate, formatNumber } from '../../../utils/format.js'
+import { formatDate, formatNumber, formatPercent } from '../../../utils/format.js'
 
 export default function StationTable({ rows, loading, onDetail, onEdit, onDelete }) {
   const columns = [
@@ -36,15 +36,18 @@ export default function StationTable({ rows, loading, onDetail, onEdit, onDelete
       render: (row) => formatNumber(row.stats?.measurement_count ?? 0, 0)
     },
     {
-      key: 'exceeded',
-      title: '超标记录',
+      key: 'compliance',
+      title: '达标率',
       align: 'right',
-      render: (row) =>
-        row.stats?.exceeded_count ? (
-          <span className="danger-text strong">{row.stats.exceeded_count}</span>
-        ) : (
-          <span className="muted">0</span>
-        )
+      render: (row) => (
+        <div>
+          <div className="strong">{formatPercent(row.stats?.compliance_rate)}</div>
+          <div className="small muted">
+            参评 {row.stats?.rateable_count ?? 0} · 超标 {row.stats?.exceeded_count ?? 0}
+            {(row.stats?.invalid_count ?? 0) > 0 ? ` · 无效 ${row.stats.invalid_count}` : ''}
+          </div>
+        </div>
+      )
     },
     {
       key: 'pending',

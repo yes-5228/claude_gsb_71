@@ -10,6 +10,7 @@ import Tag from '../../components/common/Tag.jsx'
 import { EXCEEDANCE_LEVEL_TONE } from '../../constants/index.js'
 import { useAsyncData } from '../../hooks/useAsyncData.js'
 import { formatDateTime, formatNumber, formatPercent, formatRatio } from '../../utils/format.js'
+import { rateFootnote } from '../../utils/compliance.js'
 
 export default function OverviewPage() {
   const loader = useCallback(() => overview(), [])
@@ -61,10 +62,10 @@ export default function OverviewPage() {
           foot={`覆盖 ${measurements.station_count} 个监测点 · 均值 ${formatNumber(measurements.avg_value)}`}
         />
         <StatCard
-          label="超标记录"
-          value={exceedances.total}
-          tone={exceedances.total ? 'danger' : undefined}
-          foot={`超标率 ${formatPercent(measurements.exceed_rate)} · 最大 ${formatRatio(exceedances.max_ratio)}`}
+          label="达标率"
+          value={formatPercent(measurements.compliance_rate)}
+          tone={measurements.compliance_rate !== null && measurements.compliance_rate < 0.9 ? 'warning' : undefined}
+          foot={`参评 ${measurements.rateable_count} · 有效超标 ${measurements.exceeded_count} · 超标率 ${formatPercent(measurements.exceed_rate)}`}
         />
         <StatCard
           label="待标注超标"
@@ -75,6 +76,9 @@ export default function OverviewPage() {
           }
         />
       </div>
+      <p className="hint small">
+        {rateFootnote(measurements)} · 与数据查询页、监测数据列表及 CSV 导出为同一口径
+      </p>
 
       <div className="grid-2">
         <SectionCard title="近 7 日数据量趋势" hint="按日统计录入条数, 红色代表当日存在超标">

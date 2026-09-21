@@ -9,7 +9,8 @@ import { useToast } from '../../components/common/ToastProvider.jsx'
 import { useAsyncData } from '../../hooks/useAsyncData.js'
 import { useListQuery } from '../../hooks/useListQuery.js'
 import { saveBlob } from '../../utils/download.js'
-import { formatDateTime, formatNumber, formatPercent } from '../../utils/format.js'
+import { formatNumber, formatPercent } from '../../utils/format.js'
+import { rateFootnote } from '../../utils/compliance.js'
 import QueryFilters from './components/QueryFilters.jsx'
 import QueryResultTable from './components/QueryResultTable.jsx'
 import StatisticsPanel from './components/StatisticsPanel.jsx'
@@ -75,19 +76,20 @@ export default function QueryPage() {
       <div className="stat-grid">
         <StatCard label="符合条件的数据量" value={summary ? summary.total : '-'} foot={summary ? `涉及 ${summary.station_count} 个监测点` : ''} />
         <StatCard
-          label="超标记录"
-          value={summary ? summary.exceeded_count : '-'}
-          tone={summary?.exceeded_count ? 'danger' : undefined}
+          label="达标率"
+          value={summary ? formatPercent(summary.compliance_rate) : '-'}
+          tone={summary?.compliance_rate !== null && summary?.compliance_rate < 0.9 ? 'warning' : undefined}
           foot={summary ? `超标率 ${formatPercent(summary.exceed_rate)}` : ''}
         />
-        <StatCard label="平均浓度" value={summary ? formatNumber(summary.avg_value) : '-'} foot="按当前筛选范围计算" />
         <StatCard
-          label="时间范围"
-          value={summary ? formatDateTime(summary.first_measured_at).slice(5, 10) : '-'}
-          unit={summary ? `~ ${formatDateTime(summary.last_measured_at).slice(5, 10)}` : ''}
-          foot={summary ? `${formatDateTime(summary.first_measured_at)} ~ ${formatDateTime(summary.last_measured_at)}` : ''}
+          label="参评 / 超标"
+          value={summary ? `${summary.rateable_count} / ${summary.exceeded_count}` : '-'}
+          tone={summary?.exceeded_count ? 'danger' : undefined}
+          foot={summary ? `无效剔除 ${summary.invalid_count} · 无限值不参评 ${summary.unrateable_count}` : ''}
         />
+        <StatCard label="平均浓度" value={summary ? formatNumber(summary.avg_value) : '-'} foot="按当前筛选范围全部数据计算" />
       </div>
+      {summary ? <p className="hint small">{rateFootnote(summary)} · 统计覆盖全部筛选结果, 与分页无关</p> : null}
 
       <StatisticsPanel
         params={statsParams}
