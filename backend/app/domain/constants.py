@@ -16,7 +16,7 @@ STATION_STATUS_LABELS = {"active": "运行中", "maintenance": "维护中", "off
 
 EXCEEDANCE_LEVEL_LABELS = {"light": "轻度超标", "moderate": "中度超标", "severe": "重度超标"}
 
-EXCEEDANCE_STATUS_LABELS = {"pending": "待标注", "confirmed": "已确认", "ignored": "已忽略"}
+EXCEEDANCE_STATUS_LABELS = {"pending": "待标注", "confirmed": "已确认", "ignored": "已忽略(无效)"}
 
 
 def as_options(label_map):

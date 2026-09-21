@@ -24,7 +24,7 @@ export default function MeasurementTable({ rows, loading, onDelete }) {
       align: 'right',
       className: 'cell-nowrap',
       render: (row) => (
-        <span className={row.is_exceeded ? 'danger-text strong' : ''}>
+        <span className={row.compliance_state === 'exceeded' ? 'danger-text strong' : ''}>
           {formatNumber(row.value)} <span className="muted small">{row.unit}</span>
         </span>
       )
@@ -36,10 +36,13 @@ export default function MeasurementTable({ rows, loading, onDelete }) {
       render: (row) => (row.limit_value === null ? <span className="muted small">无限值</span> : formatNumber(row.limit_value))
     },
     {
-      key: 'is_exceeded',
-      title: '超标判定',
-      render: (row) =>
-        row.is_exceeded ? <Tag tone="danger">{formatRatio(row.exceed_ratio)}</Tag> : <Tag tone="success">达标</Tag>
+      key: 'compliance_state',
+      title: '达标状态',
+      render: (row) => {
+        if (row.compliance_state === 'exceeded') return <Tag tone="danger">{formatRatio(row.exceed_ratio)}</Tag>
+        if (row.compliance_state === 'qualified') return <Tag tone="success">达标</Tag>
+        return <Tag tone="neutral">{row.compliance_label}</Tag>
+      }
     },
     {
       key: 'data_source_label',

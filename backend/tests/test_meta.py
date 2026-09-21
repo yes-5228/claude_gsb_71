@@ -29,6 +29,9 @@ def test_overview_endpoint_aggregates_everything(client, station, entry_payload)
     assert body["stations"]["total"] == 1
     assert body["measurements"]["total"] == 3
     assert body["measurements"]["exceeded_count"] == 1
+    assert body["measurements"]["evaluated_count"] == 2
+    assert body["measurements"]["not_applicable_count"] == 1
+    assert body["measurements"]["compliance_rate"] == 0.0
     assert body["exceedances"]["pending"] == 1
     assert body["pending_exceedances"][0]["pollutant"] == "SO2"
     assert body["trend"]["group_by"] == "day"

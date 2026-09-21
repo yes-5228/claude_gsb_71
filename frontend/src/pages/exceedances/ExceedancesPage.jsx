@@ -110,7 +110,7 @@ export default function ExceedancesPage() {
                   onChange={(event) => setBatch({ ...batch, status: event.target.value })}
                 >
                   <option value="confirmed">已确认</option>
-                  <option value="ignored">已忽略</option>
+                  <option value="ignored">已忽略(无效)</option>
                   <option value="pending">重置为待标注</option>
                 </select>
                 <input

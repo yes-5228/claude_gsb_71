@@ -75,10 +75,12 @@ export default function QueryPage() {
       <div className="stat-grid">
         <StatCard label="符合条件的数据量" value={summary ? summary.total : '-'} foot={summary ? `涉及 ${summary.station_count} 个监测点` : ''} />
         <StatCard
-          label="超标记录"
+          label="有效超标记录"
           value={summary ? summary.exceeded_count : '-'}
           tone={summary?.exceeded_count ? 'danger' : undefined}
-          foot={summary ? `超标率 ${formatPercent(summary.exceed_rate)}` : ''}
+          foot={summary
+            ? `达标率 ${formatPercent(summary.compliance_rate)} · ${summary.evaluated_count} 条参评, ${summary.invalid_count} 条无效, ${summary.not_applicable_count} 条无限值`
+            : ''}
         />
         <StatCard label="平均浓度" value={summary ? formatNumber(summary.avg_value) : '-'} foot="按当前筛选范围计算" />
         <StatCard
@@ -100,7 +102,7 @@ export default function QueryPage() {
 
       <SectionCard
         title="查询结果"
-        hint="按监测时间倒序, 单次导出最多 20000 行"
+        hint="统计按全部筛选结果计算; CSV 最多导出 20000 行, 报表口径不受当前页和导出行数影响"
         actions={
           <>
             <button type="button" className="btn btn-sm" onClick={query.reload} disabled={query.loading}>

@@ -1,6 +1,11 @@
 """监测点台账业务逻辑."""
-from sqlalchemy import cast, func, or_
+from sqlalchemy import case, func, or_
 
+from ..domain.compliance_sql import (
+    integer_sum,
+    invalid_exceedance_expression,
+    valid_exceeded_expression,
+)
 from ..domain.constants import STATION_STATUS_LABELS, STATION_TYPE_LABELS
 from ..errors import ConflictError, NotFoundError
 from ..extensions import db
@@ -90,8 +95,11 @@ def stats_map(station_ids):
         .all()
     )
     exceeded = dict(
-        db.session.query(Measurement.station_id, func.count(Measurement.id))
-        .filter(Measurement.station_id.in_(station_ids), Measurement.is_exceeded.is_(True))
+        db.session.query(
+            Measurement.station_id,
+            integer_sum(valid_exceeded_expression()),
+        )
+        .filter(Measurement.station_id.in_(station_ids))
         .group_by(Measurement.station_id)
         .all()
     )
@@ -112,7 +120,7 @@ def stats_map(station_ids):
     return {
         station_id: {
             "measurement_count": int(measurements.get(station_id, 0)),
-            "exceeded_count": int(exceeded.get(station_id, 0)),
+            "exceeded_count": int(exceeded.get(station_id) or 0),
             "pending_count": int(pending.get(station_id, 0)),
             "last_measured_at": iso(last_seen.get(station_id)),
         }
@@ -126,9 +134,9 @@ def detail_stats(station):
         db.session.query(
             Measurement.pollutant,
             func.count(Measurement.id),
-            func.sum(cast(Measurement.is_exceeded, db.Integer)),
-            func.avg(Measurement.value),
-            func.max(Measurement.value),
+            integer_sum(valid_exceeded_expression()),
+            func.avg(case((~invalid_exceedance_expression(), Measurement.value))),
+            func.max(case((~invalid_exceedance_expression(), Measurement.value))),
         )
         .filter(Measurement.station_id == station.id)
         .group_by(Measurement.pollutant)

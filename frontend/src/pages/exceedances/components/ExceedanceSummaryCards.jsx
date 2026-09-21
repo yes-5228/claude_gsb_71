@@ -25,7 +25,7 @@ export default function ExceedanceSummaryCards({ summary }) {
         label="待标注"
         value={summary.pending}
         tone={summary.pending ? 'warning' : undefined}
-        foot={`已确认 ${statusMap.confirmed || 0} · 已忽略 ${statusMap.ignored || 0}`}
+        foot={`已确认 ${statusMap.confirmed || 0} · 无效 ${statusMap.ignored || 0}`}
       />
       <StatCard
         label="等级分布"

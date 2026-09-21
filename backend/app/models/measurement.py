@@ -1,4 +1,9 @@
 """监测数据记录."""
+from ..domain.compliance import (
+    COMPLIANCE_STATE_LABELS,
+    COMPLIANCE_STATUS_LABELS,
+    state_for_row,
+)
 from ..domain.constants import DATA_SOURCE_LABELS, PERIOD_LABELS, label_of
 from ..domain.standards import get_pollutant
 from ..extensions import db
@@ -43,7 +48,14 @@ class Measurement(TimestampMixin, db.Model):
         meta = get_pollutant(self.pollutant)
         return meta["label"] if meta else self.pollutant
 
+    def compliance_state(self):
+        return state_for_row(self)
+
+    def compliance_label(self):
+        return COMPLIANCE_STATE_LABELS[self.compliance_state()]
+
     def to_dict(self, include_station=False):
+        compliance_state = self.compliance_state()
         payload = {
             "id": self.id,
             "station_id": self.station_id,
@@ -56,6 +68,11 @@ class Measurement(TimestampMixin, db.Model):
             "limit_value": self.limit_value,
             "exceed_ratio": self.exceed_ratio,
             "is_exceeded": bool(self.is_exceeded),
+            "compliance_state": compliance_state,
+            "compliance_label": COMPLIANCE_STATE_LABELS[compliance_state],
+            "compliance_status_label": COMPLIANCE_STATUS_LABELS[compliance_state],
+            "is_invalid": compliance_state == "ignored",
+            "is_evaluated": compliance_state in {"qualified", "exceeded"},
             "measured_at": iso(self.measured_at),
             "data_source": self.data_source,
             "data_source_label": label_of(DATA_SOURCE_LABELS, self.data_source),

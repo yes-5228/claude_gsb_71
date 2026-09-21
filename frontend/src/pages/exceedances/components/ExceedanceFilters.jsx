@@ -6,7 +6,7 @@ import { usePollutantMeta, useStationOptions } from '../../../hooks/useOptions.j
 const STATUS_OPTIONS = [
   { value: 'pending', label: '待标注' },
   { value: 'confirmed', label: '已确认' },
-  { value: 'ignored', label: '已忽略' }
+  { value: 'ignored', label: '已忽略(无效)' }
 ]
 
 const LEVEL_OPTIONS = [

@@ -29,7 +29,7 @@ export default function StatisticsPanel({ params, onChange, data, loading, error
   return (
     <SectionCard
       title="聚合统计"
-      hint="统计基于上方筛选条件, 可与结果表交叉验证"
+      hint="统计基于全部筛选结果; 已标记无效和无限值记录不进入达标率分母"
       actions={
         <>
           <div style={{ width: 160 }}>
@@ -68,8 +68,9 @@ export default function StatisticsPanel({ params, onChange, data, loading, error
                     <th>分组</th>
                     <th className="text-right">{isCount ? '数据条数' : '统计值'}</th>
                     <th className="text-right">数据量</th>
-                    <th className="text-right">超标数</th>
-                    <th className="text-right">超标率</th>
+                    <th className="text-right">参评数</th>
+                    <th className="text-right">有效超标</th>
+                    <th className="text-right">达标率</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -78,11 +79,22 @@ export default function StatisticsPanel({ params, onChange, data, loading, error
                       <td>{item.label}</td>
                       <td className="text-right strong">{formatNumber(item.value)}</td>
                       <td className="text-right">{item.count}</td>
+                      <td className="text-right">{item.evaluated_count}</td>
                       <td className="text-right danger-text">{item.exceeded_count}</td>
-                      <td className="text-right">{formatPercent(item.exceed_rate)}</td>
+                      <td className="text-right">{formatPercent(item.compliance_rate)}</td>
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr>
+                    <td>合计</td>
+                    <td>{isCount ? formatNumber(data.totals.total) : '-'}</td>
+                    <td className="text-right">{data.totals.total}</td>
+                    <td className="text-right">{data.totals.evaluated_count}</td>
+                    <td className="text-right danger-text">{data.totals.exceeded_count}</td>
+                    <td className="text-right strong">{formatPercent(data.totals.compliance_rate)}</td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </>

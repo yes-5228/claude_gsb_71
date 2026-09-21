@@ -15,16 +15,23 @@ export default function QueryResultTable({ rows, loading }) {
       title: '监测值',
       align: 'right',
       render: (row) => (
-        <span className={row.is_exceeded ? 'danger-text strong' : ''}>
+        <span className={row.compliance_state === 'exceeded' ? 'danger-text strong' : ''}>
           {formatNumber(row.value)} <span className="muted small">{row.unit}</span>
         </span>
       )
     },
     { key: 'limit_value', title: '限值', align: 'right', render: (row) => (row.limit_value === null ? '无限值' : formatNumber(row.limit_value)) },
     {
-      key: 'is_exceeded',
-      title: '超标',
-      render: (row) => (row.is_exceeded ? <Tag tone="danger">是</Tag> : <Tag tone="success">否</Tag>)
+      key: 'compliance_state',
+      title: '达标状态',
+      render: (row) => {
+        const tone = row.compliance_state === 'exceeded'
+          ? 'danger'
+          : row.compliance_state === 'qualified'
+            ? 'success'
+            : 'neutral'
+        return <Tag tone={tone}>{row.compliance_label}</Tag>
+      }
     },
     {
       key: 'exceedance_status',
@@ -32,7 +39,7 @@ export default function QueryResultTable({ rows, loading }) {
       render: (row) =>
         row.exceedance_status ? (
           <Tag tone={EXCEEDANCE_STATUS_TONE[row.exceedance_status]}>
-            {row.exceedance_status === 'pending' ? '待标注' : row.exceedance_status === 'confirmed' ? '已确认' : '已忽略'}
+            {row.exceedance_status === 'pending' ? '待标注' : row.exceedance_status === 'confirmed' ? '已确认' : '已忽略(无效)'}
           </Tag>
         ) : (
           <span className="muted">-</span>

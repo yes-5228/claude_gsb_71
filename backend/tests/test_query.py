@@ -27,7 +27,9 @@ def test_query_by_date_range_and_values(client, station, entry_payload):
 
     all_rows = client.get("/api/query/measurements").get_json()
     assert all_rows["total"] == 4
-    assert all_rows["summary"]["exceed_rate"] == 0.5
+    assert all_rows["summary"]["evaluated_count"] == 4
+    assert all_rows["summary"]["exceeded_count"] == 2
+    assert all_rows["summary"]["compliance_rate"] == 0.5
 
     day_range = client.get(
         "/api/query/measurements?date_from=2026-09-02&date_to=2026-09-02"
@@ -39,7 +41,7 @@ def test_query_by_date_range_and_values(client, station, entry_payload):
 
     filters = client.get("/api/query/measurements?is_exceeded=true").get_json()
     assert filters["summary"]["exceeded_count"] == 2
-    assert filters["summary"]["exceed_rate"] == 1.0
+    assert filters["summary"]["compliance_rate"] == 1.0
     assert filters["applied_filters"]["pollutants"] == []
 
 
@@ -66,15 +68,19 @@ def test_statistics_by_pollutant_and_metric(client, station, entry_payload):
     counts = client.get("/api/query/statistics?group_by=pollutant&metric=count").get_json()
     assert {item["key"]: item["value"] for item in counts["items"]} == {"PM25": 2.0, "SO2": 2.0}
 
-    exceeded = {item["key"]: item["exceeded_count"] for item in counts["items"]}
-    assert exceeded == {"PM25": 1, "SO2": 1}
+    stats = {item["key"]: item for item in counts["items"]}
+    assert stats["PM25"]["applicable_count"] == 2
+    assert stats["PM25"]["exceeded_count"] == 1
+    assert stats["PM25"]["compliance_rate"] == 0.5
+    assert stats["SO2"]["exceeded_count"] == 1
+    assert stats["SO2"]["compliance_rate"] == 0.5
 
 
 def test_statistics_by_day_is_chronological(client, station, entry_payload):
     _seed_two_days(client, station, entry_payload)
     body = client.get("/api/query/statistics?group_by=day&metric=avg").get_json()
     assert [item["key"] for item in body["items"]] == ["2026-09-01", "2026-09-02"]
-    assert body["totals"]["count"] == 4
+    assert body["totals"]["total"] == 4
 
 
 def test_statistics_by_station_uses_station_labels(client, station, second_station, entry_payload):
@@ -93,7 +99,7 @@ def test_query_export_respects_filters(client, station, entry_payload):
     response = client.get("/api/query/export?pollutant=PM25")
     assert response.status_code == 200
     lines = response.get_data(as_text=True).strip().splitlines()
-    assert len(lines) == 3
+    assert len(lines) == 12
     assert lines[0].startswith("\ufeff站点编码")
     assert "PM2.5" in lines[1]
 

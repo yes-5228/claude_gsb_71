@@ -9,8 +9,8 @@ const PERIODS = [
 ]
 
 const EXCEEDED_OPTIONS = [
-  { value: 'true', label: '仅超标' },
-  { value: 'false', label: '仅达标' }
+  { value: 'true', label: '自动判定超标' },
+  { value: 'false', label: '自动判定未超标' }
 ]
 
 export default function MeasurementFilters({ value, loading, onSubmit, onReset }) {
@@ -55,7 +55,7 @@ export default function MeasurementFilters({ value, loading, onSubmit, onReset }
       <Field label="数据周期">
         <Select value={draft.period || ''} onChange={update('period')} placeholder="全部周期" options={PERIODS} />
       </Field>
-      <Field label="超标情况">
+      <Field label="自动超标判定">
         <Select value={draft.is_exceeded || ''} onChange={update('is_exceeded')} placeholder="全部" options={EXCEEDED_OPTIONS} />
       </Field>
       <Field label="开始日期">

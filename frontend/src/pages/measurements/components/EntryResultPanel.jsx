@@ -45,9 +45,11 @@ export default function EntryResultPanel({ result, summary, onClose }) {
                 <div className="stat-value">{summary.total}</div>
               </div>
               <div className="stat-card">
-                <div className="stat-label">其中超标</div>
+                <div className="stat-label">有效超标</div>
                 <div className="stat-value danger-text">{summary.exceeded_count}</div>
-                <div className="stat-foot">超标率 {formatPercent(summary.exceed_rate)}</div>
+                <div className="stat-foot">
+                  达标率 {formatPercent(summary.compliance_rate)} · {summary.evaluated_count} 条参评 · {summary.invalid_count} 条无效
+                </div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">涉及监测点</div>

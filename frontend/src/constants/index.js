@@ -14,7 +14,7 @@ export const EXCEEDANCE_LEVEL_TONE = { light: 'info', moderate: 'warning', sever
 export const DATA_SOURCE_TONE = { manual: 'primary', device: 'info', import: 'neutral' }
 
 export const EXCEEDANCE_LEVEL_LABELS = { light: '轻度超标', moderate: '中度超标', severe: '重度超标' }
-export const EXCEEDANCE_STATUS_LABELS = { pending: '待标注', confirmed: '已确认', ignored: '已忽略' }
+export const EXCEEDANCE_STATUS_LABELS = { pending: '待标注', confirmed: '已确认', ignored: '已忽略(无效)' }
 
 export const POLLUTANT_CODE_LABELS = {
   PM25: 'PM2.5',

@@ -58,13 +58,13 @@ export default function OverviewPage() {
         <StatCard
           label="监测数据总量"
           value={measurements.total}
-          foot={`覆盖 ${measurements.station_count} 个监测点 · 均值 ${formatNumber(measurements.avg_value)}`}
+          foot={`覆盖 ${measurements.station_count} 个监测点 · 均值 ${formatNumber(measurements.avg_value)} · ${measurements.invalid_count} 条无效保留但不参评`}
         />
         <StatCard
-          label="超标记录"
-          value={exceedances.total}
-          tone={exceedances.total ? 'danger' : undefined}
-          foot={`超标率 ${formatPercent(measurements.exceed_rate)} · 最大 ${formatRatio(exceedances.max_ratio)}`}
+          label="有效超标记录"
+          value={measurements.exceeded_count}
+          tone={measurements.exceeded_count ? 'danger' : undefined}
+          foot={`达标率 ${formatPercent(measurements.compliance_rate)} · ${measurements.evaluated_count} 条参评`}
         />
         <StatCard
           label="待标注超标"
@@ -77,7 +77,7 @@ export default function OverviewPage() {
       </div>
 
       <div className="grid-2">
-        <SectionCard title="近 7 日数据量趋势" hint="按日统计录入条数, 红色代表当日存在超标">
+        <SectionCard title="近 7 日数据量趋势" hint="按日统计录入条数, 红色代表当日存在有效超标; 已忽略记录不标红">
           <BarChart items={trend.items || []} precision={0} danger={false} />
         </SectionCard>
 
